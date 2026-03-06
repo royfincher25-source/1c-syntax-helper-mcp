@@ -144,3 +144,4 @@ test_data/large_*
 run_local.py
 test_local.py
 debug_*.py
+.worktrees/ 
