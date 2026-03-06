@@ -57,11 +57,12 @@ setup_exception_handlers()
 
 
 # Подключаем маршруты
-from src.routes import health_router, admin_router, mcp_router
+from src.routes import health_router, admin_router, mcp_router, sse_router
 
 app.include_router(health_router)
 app.include_router(admin_router)
 app.include_router(mcp_router)
+app.include_router(sse_router)
 
 
 @app.get("/metrics")
