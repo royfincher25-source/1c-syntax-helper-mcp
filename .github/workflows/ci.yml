@@ -1,0 +1,170 @@
+# CI/CD Pipeline для 1C Syntax Helper MCP Server
+# Запускается при push и pull request
+
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # =============================================================================
+  # Тестирование
+  # =============================================================================
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          # Останавливаем сборку если есть критические ошибки
+          flake8 src/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Предупреждения не останавливают сборку
+          flake8 src/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      
+      - name: Run tests with pytest
+        run: |
+          pip install pytest pytest-asyncio pytest-cov
+          # Запускаем тесты с покрытием
+          pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing
+      
+      - name: Upload coverage to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+      
+      - name: Check test coverage
+        run: |
+          # Проверяем что покрытие > 70%
+          coverage report --fail-under=70 || echo "Warning: Test coverage below 70%"
+
+  # =============================================================================
+  # Сборка Docker образа
+  # =============================================================================
+  build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: test  # Запускается только если тесты прошли
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: 1c-syntax-helper-mcp:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Test Docker image
+        run: |
+          docker run --rm 1c-syntax-helper-mcp:${{ github.sha }} python --version
+      
+      - name: Save Docker image
+        run: |
+          docker save 1c-syntax-helper-mcp:${{ github.sha }} > docker-image.tar
+      
+      - name: Upload Docker image
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: docker-image.tar
+
+  # =============================================================================
+  # Публикация (только для main branch)
+  # =============================================================================
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    if: github.ref == 'refs/heads/main'  # Только для main branch
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download Docker image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+      
+      - name: Load Docker image
+        run: |
+          docker load < docker-image.tar
+      
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Push to GHCR
+        run: |
+          # Тегируем образ
+          docker tag 1c-syntax-helper-mcp:${{ github.sha }} ghcr.io/${{ github.repository }}:latest
+          docker tag 1c-syntax-helper-mcp:${{ github.sha }} ghcr.io/${{ github.repository }}:${{ github.sha }}
+          
+          # Пушим
+          docker push ghcr.io/${{ github.repository }}:latest
+          docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
+      
+      - name: Create GitHub Release (для тегов)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: docker-image.tar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # =============================================================================
+  # Уведомления
+  # =============================================================================
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [test, build, publish]
+    if: always()  # Запускается всегда
+    
+    steps:
+      - name: Check job status
+        run: |
+          echo "Test status: ${{ needs.test.result }}"
+          echo "Build status: ${{ needs.build.result }}"
+          echo "Publish status: ${{ needs.publish.result }}"
+          
+          if [ "${{ needs.test.result }}" == "failure" ]; then
+            echo "❌ Tests failed"
+          elif [ "${{ needs.build.result }}" == "failure" ]; then
+            echo "❌ Build failed"
+          elif [ "${{ needs.publish.result }}" == "failure" ]; then
+            echo "❌ Publish failed"
+          else
+            echo "✅ All jobs completed successfully"
+          fi

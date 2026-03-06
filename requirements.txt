@@ -1,0 +1,33 @@
+# Python зависимости для MCP сервера синтаксис-помощника 1С
+# Production зависимости (без dev инструментов)
+
+# FastAPI и веб-сервер
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+websockets==12.0
+
+# Elasticsearch клиент
+elasticsearch==8.16.0
+aiohttp
+
+# Парсинг данных
+pydantic==2.10.2
+pydantic-settings==2.6.1
+beautifulsoup4==4.12.2
+lxml==4.9.3
+
+# HTTP клиент для внешних запросов
+httpx==0.25.2
+
+# Системные метрики и мониторинг
+psutil==5.9.8
+
+# Асинхронная работа с файлами
+aiofiles==23.2.1
+
+# Логирование и конфигурация
+python-json-logger==2.0.7
+python-dotenv==1.0.0
+
+# Мониторинг файловой системы
+watchdog==3.0.0
