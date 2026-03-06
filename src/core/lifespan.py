@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from src.core.logging import get_logger
 from src.core.elasticsearch import es_client
 from src.core.cache import cache
-from src.core.metrics.collector import get_metrics_collector, get_system_monitor
+from src.core.metrics import get_metrics_collector, get_system_monitor
 from src.core.dependency_injection import setup_dependencies
 from src.core.graceful_shutdown import graceful_shutdown
 from src.parsers.hbk_parser_optimized import HBKParserOptimized
