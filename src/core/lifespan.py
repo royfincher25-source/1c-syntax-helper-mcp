@@ -90,6 +90,10 @@ class LifespanManager:
                 self._background_tasks.append(index_task)
                 graceful_shutdown.register_background_task(index_task)
 
+        # Инициализация хранилища SSE сессий
+        app.state.sse_sessions = {}
+        logger.info("SSE sessions storage initialized")
+
         # Регистрируем cleanup callbacks
         graceful_shutdown.register_cleanup_callback(monitor.stop_monitoring)
         graceful_shutdown.register_cleanup_callback(cache.stop)
@@ -190,10 +194,6 @@ class LifespanManager:
 
         except Exception as e:
             logger.error(f"Ошибка при автоматической индексации: {e}")
-
-        # Инициализация хранилища SSE сессий
-        app.state.sse_sessions = {}
-        logger.info("SSE sessions storage initialized")
 
     async def _index_hbk_file(self, file_path: str) -> bool:
         """

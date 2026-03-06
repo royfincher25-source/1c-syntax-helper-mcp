@@ -11,7 +11,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from src.core.logging import get_logger
-from src.core.constants import SSE_QUEUE_MAX_SIZE, SSE_PING_INTERVAL_SECONDS
+from src.core.constants import SSE_QUEUE_MAX_SIZE, SSE_PING_INTERVAL_SECONDS, SSE_SESSION_TIMEOUT_SECONDS
+from src.main import app
 from src.models.mcp_models import (
     MCPToolsResponse, MCPTool, MCPToolParameter, MCPToolType,
     Find1CHelpRequest, GetSyntaxInfoRequest, GetQuickReferenceRequest,
@@ -163,11 +164,18 @@ async def mcp_sse_endpoint(request: Request):
         request.app.state.sse_sessions[session_id] = message_queue
         logger.debug(f"SSE сессия создана: {session_id}")
 
+        session_start = time.time()  # Запоминаем время начала
+
         try:
             yield f"event: endpoint\n"
             yield f"data: /mcp?session_id={session_id}\n\n"
 
             while True:
+                # Проверка таймаута сессии
+                if time.time() - session_start > SSE_SESSION_TIMEOUT_SECONDS:
+                    logger.info(f"Session timeout for {session_id}")
+                    break
+
                 try:
                     message = await asyncio.wait_for(
                         message_queue.get(),
@@ -185,9 +193,11 @@ async def mcp_sse_endpoint(request: Request):
             raise
         finally:
             # Очистка сессии при завершении
-            if session_id in request.app.state.sse_sessions:
+            try:
                 del request.app.state.sse_sessions[session_id]
                 logger.debug(f"SSE сессия удалена: {session_id}")
+            except KeyError:
+                logger.debug(f"SSE сессия {session_id} уже удалена")
 
     return StreamingResponse(
         sse_event_stream(),
@@ -373,8 +383,8 @@ async def websocket_endpoint(websocket: WebSocket):
     session_id = str(uuid.uuid4())
     message_queue = asyncio.Queue(maxsize=SSE_QUEUE_MAX_SIZE)
     
-    # Используем websocket.application.state для доступа к хранилищу сессий
-    websocket.application.state.sse_sessions[session_id] = message_queue
+    # Используем глобальный app вместо websocket.application
+    app.state.sse_sessions[session_id] = message_queue
     logger.debug(f"WebSocket сессия создана: {session_id}")
 
     try:
@@ -398,6 +408,8 @@ async def websocket_endpoint(websocket: WebSocket):
         raise
     finally:
         # Очистка сессии при завершении
-        if session_id in websocket.application.state.sse_sessions:
-            del websocket.application.state.sse_sessions[session_id]
+        try:
+            del app.state.sse_sessions[session_id]
             logger.debug(f"WebSocket сессия удалена: {session_id}")
+        except KeyError:
+            logger.debug(f"WebSocket сессия {session_id} уже удалена")
