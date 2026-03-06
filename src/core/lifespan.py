@@ -101,13 +101,36 @@ class LifespanManager:
         Выполняет shutdown очистку.
 
         Этапы:
-        1. Ожидание фоновых задач
-        2. Вызов cleanup callbacks (через graceful_shutdown)
+        1. Очистка SSE сессий
+        2. Ожидание фоновых задач
+        3. Вызов cleanup callbacks (через graceful_shutdown)
         """
-        logger.info("Lifespan shutdown завершён")
+        logger.info("Starting shutdown cleanup...")
 
-        # Graceful shutdown уже вызывается через signal handlers
-        # Здесь только финальное логирование
+        # Очистка SSE сессий
+        if hasattr(app.state, 'sse_sessions'):
+            session_count = len(app.state.sse_sessions)
+            if session_count > 0:
+                logger.info(f"Cleaning up {session_count} SSE sessions")
+                
+                # Отправляем уведомление о закрытии всем сессиям
+                shutdown_notification = {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "result": {"shutdown": True}
+                }
+                
+                for session_id, queue in list(app.state.sse_sessions.items()):
+                    try:
+                        queue.put_nowait(shutdown_notification)
+                    except asyncio.QueueFull:
+                        logger.debug(f"Queue full for session {session_id}, skipping notification")
+                
+                # Очищаем хранилище сессий
+                app.state.sse_sessions.clear()
+                logger.info(f"SSE sessions cleaned up: {session_count} sessions")
+
+        logger.info("Lifespan shutdown завершён")
 
     @asynccontextmanager
     async def lifespan(self, app: FastAPI):
@@ -167,6 +190,10 @@ class LifespanManager:
 
         except Exception as e:
             logger.error(f"Ошибка при автоматической индексации: {e}")
+
+        # Инициализация хранилища SSE сессий
+        app.state.sse_sessions = {}
+        logger.info("SSE sessions storage initialized")
 
     async def _index_hbk_file(self, file_path: str) -> bool:
         """

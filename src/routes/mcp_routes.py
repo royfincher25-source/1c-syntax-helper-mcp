@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from src.core.logging import get_logger
+from src.core.constants import SSE_QUEUE_MAX_SIZE, SSE_PING_INTERVAL_SECONDS
 from src.models.mcp_models import (
     MCPToolsResponse, MCPTool, MCPToolParameter, MCPToolType,
     Find1CHelpRequest, GetSyntaxInfoRequest, GetQuickReferenceRequest,
@@ -145,43 +146,49 @@ async def get_mcp_tools():
             ]
         )
     ]
-    
+
     return MCPToolsResponse(tools=tools)
 
 
 @router.get("")
-async def mcp_sse_endpoint():
+async def mcp_sse_endpoint(request: Request):
     """MCP Server-Sent Events endpoint - поддержка SSE для MCP протокола."""
-    
+
     async def sse_event_stream():
         """Генератор SSE событий для MCP протокола"""
         session_id = str(uuid.uuid4())
-        message_queue = asyncio.Queue()
-        
-        if not hasattr(router, 'app'):
-            router.app = router.router
-        router.app.state.sse_sessions[session_id] = message_queue
-        
+        message_queue = asyncio.Queue(maxsize=SSE_QUEUE_MAX_SIZE)
+
+        # Используем request.app.state для доступа к хранилищу сессий
+        request.app.state.sse_sessions[session_id] = message_queue
+        logger.debug(f"SSE сессия создана: {session_id}")
+
         try:
             yield f"event: endpoint\n"
             yield f"data: /mcp?session_id={session_id}\n\n"
-            
+
             while True:
                 try:
-                    message = await asyncio.wait_for(message_queue.get(), timeout=30.0)
+                    message = await asyncio.wait_for(
+                        message_queue.get(),
+                        timeout=SSE_PING_INTERVAL_SECONDS
+                    )
                     yield f"event: message\n"
                     yield f"data: {json.dumps(message)}\n\n"
-                    
+
                 except asyncio.TimeoutError:
                     yield f"event: ping\n"
                     yield f"data: {json.dumps({'timestamp': int(time.time())})}\n\n"
-                    
+
         except asyncio.CancelledError:
             logger.info(f"SSE соединение закрыто для session {session_id}")
-            if hasattr(router, 'app') and session_id in router.app.state.sse_sessions:
-                del router.app.state.sse_sessions[session_id]
             raise
-    
+        finally:
+            # Очистка сессии при завершении
+            if session_id in request.app.state.sse_sessions:
+                del request.app.state.sse_sessions[session_id]
+                logger.debug(f"SSE сессия удалена: {session_id}")
+
     return StreamingResponse(
         sse_event_stream(),
         media_type="text/event-stream",
@@ -197,12 +204,12 @@ async def mcp_sse_endpoint():
 @router.post("")
 async def mcp_sse_or_jsonrpc_endpoint(request: Request):
     """Endpoint для обработки сообщений - поддерживает SSE и обычный JSON-RPC."""
-    
+
     try:
         session_id = request.query_params.get("session_id")
         data = await request.json()
         logger.info(f"Получен запрос{' для session ' + session_id if session_id else ''}: {data.get('method', 'unknown') if isinstance(data, dict) else 'batch'}")
-        
+
         if isinstance(data, list):
             results = []
             for item in data:
@@ -211,14 +218,26 @@ async def mcp_sse_or_jsonrpc_endpoint(request: Request):
             response_data = results
         else:
             response_data = await process_single_jsonrpc_request(data)
-        
-        if session_id and hasattr(request.app.state, 'sse_sessions') and session_id in request.app.state.sse_sessions:
+
+        # Если это SSE запрос, отправляем ответ через очередь
+        if session_id and session_id in request.app.state.sse_sessions:
             queue = request.app.state.sse_sessions[session_id]
-            await queue.put(response_data)
+            try:
+                queue.put_nowait(response_data)
+            except asyncio.QueueFull:
+                logger.warning(f"Очередь переполнена для session {session_id}, сообщение потеряно")
+                return JSONResponse(
+                    status_code=503,
+                    content={"error": "Message queue full, try again later"}
+                )
             return JSONResponse(content={"status": "queued"})
         else:
+            # Обычный JSON-RPC ответ
             return JSONResponse(content=response_data)
-            
+
+    except asyncio.CancelledError:
+        logger.info("Запрос отменён во время обработки")
+        raise
     except Exception as e:
         logger.error(f"Ошибка обработки запроса: {e}")
         error_response = {
@@ -244,7 +263,7 @@ async def process_single_jsonrpc_request(data):
     method = data.get("method")
     params = data.get("params", {})
     request_id = data.get("id")
-    
+
     if method == "initialize":
         return {
             "jsonrpc": "2.0",
@@ -264,7 +283,7 @@ async def process_single_jsonrpc_request(data):
                 }
             }
         }
-    
+
     elif method == "tools/list":
         tools_response = await get_mcp_tools()
         return {
@@ -291,11 +310,11 @@ async def process_single_jsonrpc_request(data):
                 ]
             }
         }
-    
+
     elif method == "tools/call":
         tool_name = params.get("name")
         tool_args = params.get("arguments", {})
-        
+
         try:
             result = await call_mcp_tool(tool_name, tool_args)
             return {
@@ -310,7 +329,7 @@ async def process_single_jsonrpc_request(data):
                 "id": request_id,
                 "error": {"code": -32603, "message": str(e)}
             }
-    
+
     else:
         return {
             "jsonrpc": "2.0",
@@ -321,27 +340,27 @@ async def process_single_jsonrpc_request(data):
 
 async def call_mcp_tool(tool_name: str, args: dict):
     """Вызывает соответствующий MCP инструмент."""
-    
+
     if tool_name == MCPToolType.FIND_1C_HELP:
         request = Find1CHelpRequest(**args)
         return await handle_find_1c_help(request)
-    
+
     elif tool_name == MCPToolType.GET_SYNTAX_INFO:
         request = GetSyntaxInfoRequest(**args)
         return await handle_get_syntax_info(request)
-    
+
     elif tool_name == MCPToolType.GET_QUICK_REFERENCE:
         request = GetQuickReferenceRequest(**args)
         return await handle_get_quick_reference(request)
-    
+
     elif tool_name == MCPToolType.SEARCH_BY_CONTEXT:
         request = SearchByContextRequest(**args)
         return await handle_search_by_context(request)
-    
+
     elif tool_name == MCPToolType.LIST_OBJECT_MEMBERS:
         request = ListObjectMembersRequest(**args)
         return await handle_list_object_members(request)
-    
+
     else:
         raise ValueError(f"Unknown tool: {tool_name}")
 
@@ -350,11 +369,14 @@ async def call_mcp_tool(tool_name: str, args: dict):
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint для MCP протокола."""
     await websocket.accept()
-    
+
     session_id = str(uuid.uuid4())
-    message_queue = asyncio.Queue()
-    websocket.app.state.sse_sessions[session_id] = message_queue
+    message_queue = asyncio.Queue(maxsize=SSE_QUEUE_MAX_SIZE)
     
+    # Используем websocket.application.state для доступа к хранилищу сессий
+    websocket.application.state.sse_sessions[session_id] = message_queue
+    logger.debug(f"WebSocket сессия создана: {session_id}")
+
     try:
         while True:
             data = await websocket.receive_text()
@@ -368,8 +390,14 @@ async def websocket_endpoint(websocket: WebSocket):
                     "id": None,
                     "error": {"code": -32600, "message": "Invalid JSON"}
                 }))
-    
+
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for session {session_id}")
-        if session_id in websocket.app.state.sse_sessions:
-            del websocket.app.state.sse_sessions[session_id]
+    except asyncio.CancelledError:
+        logger.info(f"WebSocket соединение отменено для session {session_id}")
+        raise
+    finally:
+        # Очистка сессии при завершении
+        if session_id in websocket.application.state.sse_sessions:
+            del websocket.application.state.sse_sessions[session_id]
+            logger.debug(f"WebSocket сессия удалена: {session_id}")

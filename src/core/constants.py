@@ -52,3 +52,8 @@ EXTRACTION_TIMEOUT_SECONDS = 300
 # HTTP
 DEFAULT_REQUEST_TIMEOUT = 30
 MAX_REQUEST_SIZE_MB = 10
+
+# SSE (Server-Sent Events) конфигурация
+SSE_QUEUE_MAX_SIZE = 100  # Максимум 100 сообщений в очереди
+SSE_PING_INTERVAL_SECONDS = 30  # Интервал ping для поддержания соединения
+SSE_SESSION_TIMEOUT_SECONDS = 3600  # Максимальное время жизни сессии (1 час)
