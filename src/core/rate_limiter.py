@@ -15,7 +15,7 @@ from starlette.responses import JSONResponse
 from src.core.constants import REQUESTS_PER_MINUTE, REQUESTS_PER_HOUR
 from src.core.logging import get_logger
 from src.core.graceful_shutdown import graceful_shutdown
-from src.core._metrics import get_metrics_collector
+from src.core.metrics.collector import get_metrics_collector
 
 logger = get_logger(__name__)
 

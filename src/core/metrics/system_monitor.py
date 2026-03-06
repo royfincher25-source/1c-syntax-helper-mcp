@@ -4,7 +4,7 @@ from typing import Optional
 import psutil
 
 from src.core.logging import get_logger
-from src.core.metrics.collector import MetricsCollector
+from src.core.metrics.collector import MetricsCollector, get_metrics_collector
 
 logger = get_logger(__name__)
 
@@ -77,3 +77,21 @@ class SystemMonitor:
             
         except Exception as e:
             logger.error(f"Error collecting system metrics: {e}")
+
+
+# Глобальный экземпляр
+_system_monitor: Optional[SystemMonitor] = None
+
+
+def get_system_monitor() -> SystemMonitor:
+    """Получить глобальный экземпляр SystemMonitor."""
+    global _system_monitor
+    if _system_monitor is None:
+        _system_monitor = SystemMonitor(get_metrics_collector())
+    return _system_monitor
+
+
+def reset_system_monitor() -> None:
+    """Сбросить глобальный экземпляр (для тестов)."""
+    global _system_monitor
+    _system_monitor = None

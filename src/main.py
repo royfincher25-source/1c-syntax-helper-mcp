@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from src.core.config import settings
 from src.core.logging import get_logger
 from src.core.rate_limiter import get_rate_limiter
-from src.core._metrics import get_metrics_collector
+from src.core.metrics.collector import get_metrics_collector
 from src.core.lifespan import get_lifespan_manager
 from src.core.exception_handlers import setup_exception_handlers
 

@@ -55,7 +55,7 @@ class ExceptionHandler:
 
         # Получаем метрики
         try:
-            from src.core._metrics import get_metrics_collector
+            from src.core.metrics.collector import get_metrics_collector
             metrics = get_metrics_collector()
             await metrics.increment(f"errors.{error_type.lower()}")
         except Exception:

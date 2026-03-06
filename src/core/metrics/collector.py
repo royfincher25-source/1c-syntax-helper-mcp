@@ -201,3 +201,21 @@ class MetricsCollector:
     def get_prometheus_format(self) -> str:
         """Экспорт метрик в формате Prometheus."""
         return PrometheusFormatter.format(self)
+
+
+# Глобальный экземпляр
+_metrics_collector: Optional[MetricsCollector] = None
+
+
+def get_metrics_collector() -> MetricsCollector:
+    """Получить глобальный экземпляр MetricsCollector."""
+    global _metrics_collector
+    if _metrics_collector is None:
+        _metrics_collector = MetricsCollector()
+    return _metrics_collector
+
+
+def reset_metrics_collector() -> None:
+    """Сбросить глобальный экземпляр (для тестов)."""
+    global _metrics_collector
+    _metrics_collector = None
