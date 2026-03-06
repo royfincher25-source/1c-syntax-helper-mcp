@@ -8,17 +8,13 @@
 
 **Конфигурация MCP сервера отсутствовала в файле `%USERPROFILE%\.qwen\settings.json`**
 
+**Важное уточнение:** Qwen Code использует **JSON-RPC поверх HTTP POST**, а не SSE (Server-Sent Events). Поэтому в конфигурации необходимо указывать `/mcp` endpoint, а не `/sse`.
+
 ## Решение
 
 ### Шаг 1: Проверка работы сервера
 
-Запустите скрипт проверки:
-
-```bash
-.\check_mcp_connection.bat
-```
-
-Или выполните команды вручную:
+Выполните команды вручную:
 
 ```bash
 # Проверка Docker контейнеров
@@ -27,16 +23,16 @@ docker-compose ps
 # Проверка health endpoint
 curl http://localhost:8002/health
 
-# Проверка SSE endpoint
-curl http://localhost:8002/sse --max-time 3
-
-# Проверка MCP initialize
-curl -X POST "http://localhost:8002/sse" ^
+# Проверка MCP endpoint (JSON-RPC)
+curl -X POST "http://localhost:8002/mcp" ^
   -H "Content-Type: application/json" ^
   -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}"
 ```
 
-**Ожидаемый результат:** Все команды возвращают успешные ответы.
+**Ожидаемый результат:**
+- `docker-compose ps` показывает контейнеры `es-1c-helper` и `mcp-1c-helper` в статусе "Up"
+- `curl http://localhost:8002/health` возвращает `{"status":"healthy",...}`
+- `curl -X POST "http://localhost:8002/mcp"...` возвращает JSON-RPC ответ с `protocolVersion`
 
 ### Шаг 2: Добавление конфигурации в Qwen Code
 
@@ -47,12 +43,14 @@ curl -X POST "http://localhost:8002/sse" ^
 
 2. Добавьте сервер `1c-syntax-helper` в секцию `mcpServers`:
 
+**Критически важно:** Используйте `/mcp` endpoint (JSON-RPC), а не `/sse` (SSE)!
+
 ```json
 {
   "$version": 3,
   "mcpServers": {
     "1c-syntax-helper": {
-      "url": "http://localhost:8002/sse",
+      "url": "http://localhost:8002/mcp",
       "type": "remote",
       "enabled": true
     }
@@ -75,7 +73,7 @@ curl -X POST "http://localhost:8002/sse" ^
   },
   "mcpServers": {
     "1c_bk": {
-      "url": "http://localhost:8012/sse",
+      "url": "http://localhost:8012/mcp",
       "headers": {
         "x-collection-name": "1c_bk"
       },
@@ -83,7 +81,7 @@ curl -X POST "http://localhost:8002/sse" ^
       "enabled": true
     },
     "1c-standarti": {
-      "url": "http://localhost:8012/sse",
+      "url": "http://localhost:8012/mcp",
       "headers": {
         "x-collection-name": "1c_ssmr"
       },
@@ -91,7 +89,7 @@ curl -X POST "http://localhost:8002/sse" ^
       "enabled": true
     },
     "1c-syntax-helper": {
-      "url": "http://localhost:8002/sse",
+      "url": "http://localhost:8002/mcp",
       "type": "remote",
       "enabled": true
     }
@@ -135,7 +133,7 @@ curl -X POST "http://localhost:8002/sse" ^
 
 ## Диагностика проблем
 
-### Проблема: Qwen Code всё ещё "зависает"
+### Проблема: Qwen Code "зависает" при запуске
 
 **Возможные причины:**
 
@@ -143,14 +141,14 @@ curl -X POST "http://localhost:8002/sse" ^
    ```bash
    docker-compose ps
    ```
-   
+
    Решение:
    ```bash
    docker-compose up -d
    ```
 
-2. **Неверный порт в конфигурации**
-   - Проверьте, что в settings.json указан порт `8002`
+2. **Неверный URL в конфигурации**
+   - Проверьте, что указан URL `http://localhost:8002/mcp` (НЕ `/sse`!)
    - Проверьте, что docker-compose.yml мапит порт `8002:8000`
 
 3. **Брандмауэр блокирует подключение**
@@ -161,7 +159,7 @@ curl -X POST "http://localhost:8002/sse" ^
    ```bash
    netstat -ano | findstr :8002
    ```
-   
+
    Решение: Остановите конфликтующее приложение или измените порт
 
 ### Проблема: MCP server не отвечает
@@ -183,24 +181,6 @@ docker-compose logs mcp-server
 curl -X POST http://localhost:8002/index/rebuild
 ```
 
-### Проблема: SSE endpoint не работает
-
-**Проверка SSE:**
-
-```bash
-# Тест GET запроса (должен держать соединение)
-curl -N "http://localhost:8002/sse" --max-time 5
-
-# Тест POST запроса
-curl -X POST "http://localhost:8002/sse" ^
-  -H "Content-Type: application/json" ^
-  -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}"
-```
-
-**Ожидаемый результат:**
-- GET: curl таймаутит через 5 секунд (соединение держится)
-- POST: Возвращает JSON-RPC ответ с `protocolVersion`
-
 ---
 
 ## Архитектура подключения
@@ -210,34 +190,70 @@ curl -X POST "http://localhost:8002/sse" ^
 │  Qwen Code  │      │  MCP Server (port 8002)         │
 │  MCP Client │      │                                 │
 └──────┬──────┘      │  ┌───────────┐                  │
-       │             │  │ /sse      │                  │
-       │ 1. GET /sse │  │ (SSE)     │                  │
-       ├─────────────┼──►           │                  │
-       │             │  └─────┬─────┘                  │
-       │ 2. endpoint │        │                        │
-       │    /sse?sid │        │                        │
-       │◄────────────┼────────┘                        │
+       │             │  │ /mcp      │                  │
+       │ POST        │  │ (JSON-RPC)│                  │
+       │ JSON-RPC    │  └─────┬─────┘                  │
+       ├─────────────┼────────┘                        │
        │             │                                 │
-       │ 3. POST     │                                 │
-       │    {init}   │                                 │
-       ├─────────────┼────────────────────────────────►│
-       │             │                                 │
-       │ 4. queued   │                                 │
-       │◄────────────┼─────────────────────────────────┤
-       │             │                                 │
-       │ 5. SSE msg  │                                 │
+       │ Response    │                                 │
        │◄────────────┼─────────────────────────────────┤
        │             │                                 │
 └──────┴──────┘      └─────────────────────────────────┘
 ```
 
-**Этапы подключения:**
+**Протокол работы:**
 
-1. **GET /sse** - Qwen подключается к SSE endpoint
-2. **endpoint event** - Сервер отправляет URL для POST запросов с session_id
-3. **POST /sse?session_id=xxx** - Qwen отправляет JSON-RPC запросы
-4. **queued response** - Сервер подтверждает получение
-5. **SSE message event** - Сервер отправляет ответ через SSE stream
+1. **POST /mcp** - Qwen отправляет JSON-RPC запрос
+2. **Обработка** - Сервер обрабатывает запрос
+3. **JSON Response** - Сервер возвращает ответ
+
+**Пример JSON-RPC запроса:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {}
+}
+```
+
+**Пример ответа:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {
+      "tools": {"listChanged": false}
+    },
+    "serverInfo": {
+      "name": "1c-syntax-helper-mcp",
+      "version": "1.0.0"
+    }
+  }
+}
+```
+
+---
+
+## Почему НЕ `/sse`?
+
+**SSE (Server-Sent Events)** используется в MCP протоколе для:
+- Двусторонней связи через один endpoint
+- Push-уведомлений от сервера к клиенту
+- Поддержки старых MCP клиентов
+
+**Qwen Code использует упрощённый подход:**
+- Только HTTP POST запросы к `/mcp`
+- Каждый запрос - отдельный HTTP вызов
+- Нет необходимости в SSE stream
+
+**Если вы видите `/sse` в документации MCP:**
+- Это для других MCP клиентов (Claude Desktop, VS Code MCP Extension)
+- Qwen Code работает через прямой JSON-RPC поверх HTTP
 
 ---
 
@@ -250,4 +266,4 @@ curl -X POST "http://localhost:8002/sse" ^
 ---
 
 **Дата обновления:** 6 марта 2026 г.
-**Версия документа:** 1.0
+**Версия документа:** 1.1 (исправлен URL с `/sse` на `/mcp`)

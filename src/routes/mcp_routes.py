@@ -169,6 +169,9 @@ async def mcp_sse_endpoint(request: Request):
         try:
             yield f"event: endpoint\n"
             yield f"data: /mcp?session_id={session_id}\n\n"
+            
+            # Принудительный флеш буфера для Docker/uvicorn
+            await asyncio.sleep(0)
 
             while True:
                 # Проверка таймаута сессии

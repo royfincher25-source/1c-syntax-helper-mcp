@@ -42,6 +42,10 @@ async def sse_endpoint(request: Request):
             # Отправляем endpoint URL для POST сообщений
             yield f"event: endpoint\n"
             yield f"data: /sse?session_id={session_id}\n\n"
+            
+            # Отправляем initial ping для инициализации соединения
+            yield f"event: ping\n"
+            yield f"data: {{\"initialized\": true, \"timestamp\": {int(time.time())}}}\n\n"
 
             while True:
                 # Проверка таймаута сессии
@@ -74,12 +78,14 @@ async def sse_endpoint(request: Request):
 
     return StreamingResponse(
         sse_event_stream(),
+        status_code=200,
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Connection": "keep-alive",
             "Access-Control-Allow-Origin": "*",
-            "X-Accel-Buffering": "no"
+            "X-Accel-Buffering": "no",
+            "Transfer-Encoding": "chunked"
         }
     )
 
