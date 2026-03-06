@@ -1,7 +1,7 @@
 """Форматтер ответов MCP."""
 
 from typing import Dict, List, Any
-from src.handlers.formatters import SearchFormatter, SyntaxFormatter, ObjectFormatter
+from src.search.formatter import SearchFormatter
 
 
 class MCPResponseFormatter:
@@ -9,8 +9,6 @@ class MCPResponseFormatter:
 
     def __init__(self):
         self.search = SearchFormatter()
-        self.syntax = SyntaxFormatter()
-        self.object = ObjectFormatter()
 
     @staticmethod
     def create_error_response(message: str, details: str = None) -> Dict[str, Any]:
@@ -45,11 +43,11 @@ class MCPResponseFormatter:
     
     def format_syntax_info(self, result: Dict[str, Any]) -> str:
         """Форматирует техническую справку."""
-        return self.syntax.format_syntax_info(result)
+        return self.search.format_syntax_info(result)
     
     def format_quick_reference(self, result: Dict[str, Any]) -> str:
         """Форматирует краткую справку."""
-        return self.syntax.format_quick_reference(result)
+        return self.search.format_quick_reference(result)
     
     def format_context_search(
         self, 
@@ -70,7 +68,7 @@ class MCPResponseFormatter:
         total: int
     ) -> str:
         """Форматирует список элементов объекта."""
-        return self.object.format_object_members_list(
+        return self.search.format_object_members_list(
             object_name, member_type, methods, properties, events, total
         )
 
