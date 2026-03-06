@@ -32,28 +32,33 @@ class MCPResponseFormatter:
     def create_success_response(content: List[Dict[str, str]]) -> Dict[str, Any]:
         """Создаёт стандартизированный успешный ответ."""
         return {"content": content}
-    
+
+
     def format_search_header(self, count: int, query: str) -> Dict[str, str]:
         """Форматирует заголовок результатов поиска."""
         return self.search.format_search_header(count, query)
-    
+
+
     def format_search_result(self, result: Dict[str, Any], index: int) -> Dict[str, str]:
         """Форматирует отдельный результат поиска."""
         return self.search.format_search_result(result, index)
-    
+
+
     def format_syntax_info(self, result: Dict[str, Any]) -> str:
         """Форматирует техническую справку."""
         return self.search.format_syntax_info(result)
-    
+
+
     def format_quick_reference(self, result: Dict[str, Any]) -> str:
         """Форматирует краткую справку."""
         return self.search.format_quick_reference(result)
-    
+
+
     def format_context_search(
-        self, 
-        search_results: List[Dict[str, Any]], 
-        query: str, 
-        context: str
+            self,
+            search_results: List[Dict[str, Any]],
+            query: str,
+            context: str
     ) -> str:
         """Форматирует результаты контекстного поиска."""
         return self.search.format_context_search(search_results, query, context)
