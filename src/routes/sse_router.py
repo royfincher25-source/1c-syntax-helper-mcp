@@ -6,7 +6,7 @@ import time
 import uuid
 
 from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 
 from src.core.logging import get_logger
 from src.core.constants import SSE_QUEUE_MAX_SIZE, SSE_PING_INTERVAL_SECONDS, SSE_SESSION_TIMEOUT_SECONDS
@@ -41,12 +41,16 @@ async def sse_endpoint(request: Request):
         try:
             # Отправляем endpoint URL для POST сообщений
             yield f"event: endpoint\n"
-            yield f"data: /sse?session_id={session_id}\n\n"
+            yield f"data: /sse\n\n"
             
-            # Отправляем initial ping для инициализации соединения
+            # Отправляем ping для инициализации соединения
             yield f"event: ping\n"
-            yield f"data: {{\"initialized\": true, \"timestamp\": {int(time.time())}}}\n\n"
-
+            yield f"data: {{\"status\": \"connected\"}}\n\n"
+            
+            # Принудительный флеш буфера
+            await asyncio.sleep(0)
+            
+            # Ждём пока клиент отправит POST запрос
             while True:
                 # Проверка таймаута сессии
                 if time.time() - session_start > SSE_SESSION_TIMEOUT_SECONDS:
@@ -94,13 +98,14 @@ async def sse_endpoint(request: Request):
 async def sse_message_handler(request: Request):
     """
     Обработчик POST сообщений для SSE сессий.
-    
+
     Клиенты отправляют JSON-RPC запросы на этот эндпоинт,
     а ответы получают через SSE stream.
     """
-    
+
     try:
-        session_id = request.query_params.get("session_id")
+        # Получаем session_id из заголовка MCP-Session-ID или query параметра
+        session_id = request.headers.get("mcp-session-id") or request.query_params.get("session_id")
         data = await request.json()
         logger.info(f"Получен SSE запрос{' для session ' + session_id if session_id else ''}: {data.get('method', 'unknown') if isinstance(data, dict) else 'batch'}")
 
@@ -120,11 +125,20 @@ async def sse_message_handler(request: Request):
                 queue.put_nowait(response_data)
             except asyncio.QueueFull:
                 logger.warning(f"Очередь переполнена для session {session_id}, сообщение потеряно")
-                return {"status": "error", "error": "Message queue full"}
-            return {"status": "queued"}
+                return Response(
+                    content="event: message\ndata: {\"status\": \"error\", \"error\": \"Message queue full\"}\n\n",
+                    media_type="text/event-stream"
+                )
+            return Response(
+                content="event: message\ndata: {\"status\": \"queued\"}\n\n",
+                media_type="text/event-stream"
+            )
         else:
             # Обычный JSON-RPC ответ (если сессия не найдена)
-            return response_data
+            return Response(
+                content=f"event: message\ndata: {json.dumps(response_data, ensure_ascii=False)}\n\n",
+                media_type="text/event-stream"
+            )
 
     except asyncio.CancelledError:
         logger.info("Запрос отменён во время обработки")
