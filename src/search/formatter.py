@@ -34,7 +34,7 @@ class SearchFormatter:
             formatted_results.append(formatted_doc)
 
         return formatted_results
-    
+
     def format_function_details(self, doc: Dict[str, Any]) -> Dict[str, Any]:
         """Форматирует подробную информацию о функции."""
         formatted = self._format_document(doc)
@@ -58,7 +58,7 @@ class SearchFormatter:
         }
         
         return formatted
-    
+
     def format_object_method(self, doc: Dict[str, Any]) -> Dict[str, Any]:
         """Форматирует метод объекта."""
         return {
@@ -70,17 +70,16 @@ class SearchFormatter:
             "return_type": doc.get("return_type", ""),
             "type": "method"
         }
-    
+
     def format_object_property(self, doc: Dict[str, Any]) -> Dict[str, Any]:
         """Форматирует свойство объекта."""
         return {
             "name": doc.get("name", ""),
-            "type": doc.get("return_type", ""),
+            "type": "property",
             "description": doc.get("description", ""),
-            "access": self._determine_property_access(doc),
-            "type": "property"
+            "access": self._determine_property_access(doc)
         }
-    
+
     def format_object_event(self, doc: Dict[str, Any]) -> Dict[str, Any]:
         """Форматирует событие объекта."""
         return {
@@ -89,7 +88,7 @@ class SearchFormatter:
             "parameters": self._format_parameters_brief(doc.get("parameters", [])),
             "type": "event"
         }
-    
+
     def _format_document(
         self,
         doc: Dict[str, Any],
@@ -122,7 +121,7 @@ class SearchFormatter:
             formatted["examples"] = doc.get("examples", [])
         
         return formatted
-    
+
     def _format_parameters_brief(self, parameters: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Краткое форматирование параметров."""
         if not parameters:
@@ -138,7 +137,7 @@ class SearchFormatter:
             })
         
         return formatted_params
-    
+
     def _format_parameters_detailed(self, parameters: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Подробное форматирование параметров."""
         if not parameters:
@@ -183,7 +182,7 @@ class SearchFormatter:
                         return sentence.strip()
         
         return ""
-    
+
     def _determine_property_access(self, doc: Dict[str, Any]) -> str:
         """Определяет тип доступа к свойству."""
         description = doc.get("description", "").lower()
@@ -194,7 +193,7 @@ class SearchFormatter:
             return "writeonly"
         else:
             return "readwrite"
-    
+
     def _calculate_relevance_level(self, score: float) -> str:
         """Вычисляет уровень релевантности."""
         if score >= 10.0:
@@ -215,7 +214,7 @@ class SearchFormatter:
             "type": "text",
             "text": f"📋 **Найдено:** {count} элементов по запросу \"{query}\"\n"
         }
-    
+
     @staticmethod
     def format_search_result(result: Dict[str, Any], index: int) -> Dict[str, str]:
         """Форматирует отдельный результат поиска."""
@@ -232,7 +231,7 @@ class SearchFormatter:
             text += f"\n   └ {desc}"
         
         return {"type": "text", "text": text + "\n"}
-    
+
     @staticmethod
     def format_context_search(
         search_results: List[Dict[str, Any]], 
@@ -311,9 +310,9 @@ class SearchFormatter:
     def format_object_members_list(
         object_name: str, 
         member_type: str, 
-        methods: list, 
-        properties: list, 
-        events: list, 
+        methods: List[Dict[str, Any]], 
+        properties: List[Dict[str, Any]], 
+        events: List[Dict[str, Any]], 
         total: int
     ) -> str:
         """Форматирует список элементов объекта."""
