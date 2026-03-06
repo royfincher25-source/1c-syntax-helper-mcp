@@ -1,20 +1,20 @@
-# Настройка подключения Qwen Code к 1c-syntax-helper MCP
+# Настройка MCP клиентов для работы с 1c-syntax-helper
 
 ## Проблема
 
-При запуске Qwen Code с конфигурацией `1c-syntax-helper` сервер "зависал" и не подключался.
+MCP клиенты могут "зависать" при подключении к серверу, если указан неверный endpoint.
 
 ## Причина
 
-**Конфигурация MCP сервера отсутствовала в файле `%USERPROFILE%\.qwen\settings.json`**
+**Некоторые MCP клиенты используют JSON-RPC поверх HTTP POST, а не SSE (Server-Sent Events).**
 
-**Важное уточнение:** Qwen Code использует **JSON-RPC поверх HTTP POST**, а не SSE (Server-Sent Events). Поэтому в конфигурации необходимо указывать `/mcp` endpoint, а не `/sse`.
+В конфигурации необходимо указывать `/mcp` endpoint для JSON-RPC клиентов.
 
 ## Решение
 
 ### Шаг 1: Проверка работы сервера
 
-Выполните команды вручную:
+Выполните команды для проверки работоспособности сервера:
 
 ```bash
 # Проверка Docker контейнеров
@@ -24,22 +24,19 @@ docker-compose ps
 curl http://localhost:8002/health
 
 # Проверка MCP endpoint (JSON-RPC)
-curl -X POST "http://localhost:8002/mcp" ^
-  -H "Content-Type: application/json" ^
-  -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}"
+curl -X POST "http://localhost:8002/mcp" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
 ```
 
 **Ожидаемый результат:**
-- `docker-compose ps` показывает контейнеры `es-1c-helper` и `mcp-1c-helper` в статусе "Up"
+- `docker-compose ps` показывает контейнеры в статусе "Up"
 - `curl http://localhost:8002/health` возвращает `{"status":"healthy",...}`
 - `curl -X POST "http://localhost:8002/mcp"...` возвращает JSON-RPC ответ с `protocolVersion`
 
-### Шаг 2: Добавление конфигурации в Qwen Code
+### Шаг 2: Добавление конфигурации в MCP клиент
 
-1. Откройте файл конфигурации Qwen:
-   - Нажмите `Win+R`
-   - Введите: `%USERPROFILE%\.qwen\settings.json`
-   - Нажмите Enter
+1. Откройте файл конфигурации вашего MCP клиента
 
 2. Добавьте сервер `1c-syntax-helper` в секцию `mcpServers`:
 
@@ -47,7 +44,6 @@ curl -X POST "http://localhost:8002/mcp" ^
 
 ```json
 {
-  "$version": 3,
   "mcpServers": {
     "1c-syntax-helper": {
       "url": "http://localhost:8002/mcp",
@@ -58,19 +54,10 @@ curl -X POST "http://localhost:8002/mcp" ^
 }
 ```
 
-**Полный пример с другими серверами:**
+**Полный пример с несколькими серверами:**
 
 ```json
 {
-  "$version": 3,
-  "ide": {
-    "hasSeenNudge": true
-  },
-  "security": {
-    "auth": {
-      "selectedType": "qwen-oauth"
-    }
-  },
   "mcpServers": {
     "1c_bk": {
       "url": "http://localhost:8012/mcp",
@@ -93,29 +80,21 @@ curl -X POST "http://localhost:8002/mcp" ^
       "type": "remote",
       "enabled": true
     }
-  },
-  "tools": {
-    "approvalMode": "default"
-  },
-  "model": {
-    "name": "coder-model"
   }
 }
 ```
 
 3. **Сохраните файл**
 
-### Шаг 3: Перезапуск Qwen Code
+### Шаг 3: Перезапуск клиента
 
-1. **Полностью закройте Qwen Code**
-   - Файл → Выход
-   - Или `Alt+F4`
+1. **Полностью закройте клиент** (IDE, редактор кода, и т.д.)
 
-2. **Запустите Qwen Code снова**
+2. **Запустите клиент снова**
 
 ### Шаг 4: Тестирование подключения
 
-Задайте Qwen Code вопрос для проверки:
+Отправьте тестовый запрос через MCP клиент:
 
 ```
 Найди информацию о функции СтрДлина
@@ -127,13 +106,13 @@ curl -X POST "http://localhost:8002/mcp" ^
 Как использовать Массив в 1С?
 ```
 
-**Ожидаемый результат:** Qwen Code отправляет запрос к MCP серверу и получает ответ.
+**Ожидаемый результат:** Клиент отправляет запрос к MCP серверу и получает ответ.
 
 ---
 
 ## Диагностика проблем
 
-### Проблема: Qwen Code "зависает" при запуске
+### Проблема: Клиент "зависает" при запуске
 
 **Возможные причины:**
 
@@ -152,7 +131,7 @@ curl -X POST "http://localhost:8002/mcp" ^
    - Проверьте, что docker-compose.yml мапит порт `8002:8000`
 
 3. **Брандмауэр блокирует подключение**
-   - Проверьте правила брандмауэра Windows
+   - Проверьте правила брандмауэра
    - Разрешите подключение к порту 8002
 
 4. **Конфликт с другим сервером**
@@ -187,8 +166,8 @@ curl -X POST http://localhost:8002/index/rebuild
 
 ```
 ┌─────────────┐      ┌─────────────────────────────────┐
-│  Qwen Code  │      │  MCP Server (port 8002)         │
-│  MCP Client │      │                                 │
+│  MCP Client │      │  MCP Server (port 8002)         │
+│             │      │                                 │
 └──────┬──────┘      │  ┌───────────┐                  │
        │             │  │ /mcp      │                  │
        │ POST        │  │ (JSON-RPC)│                  │
@@ -203,7 +182,7 @@ curl -X POST http://localhost:8002/index/rebuild
 
 **Протокол работы:**
 
-1. **POST /mcp** - Qwen отправляет JSON-RPC запрос
+1. **POST /mcp** - Клиент отправляет JSON-RPC запрос
 2. **Обработка** - Сервер обрабатывает запрос
 3. **JSON Response** - Сервер возвращает ответ
 
@@ -246,14 +225,25 @@ curl -X POST http://localhost:8002/index/rebuild
 - Push-уведомлений от сервера к клиенту
 - Поддержки старых MCP клиентов
 
-**Qwen Code использует упрощённый подход:**
+**Большинство современных MCP клиентов используют упрощённый подход:**
 - Только HTTP POST запросы к `/mcp`
 - Каждый запрос - отдельный HTTP вызов
 - Нет необходимости в SSE stream
 
 **Если вы видите `/sse` в документации MCP:**
-- Это для других MCP клиентов (Claude Desktop, VS Code MCP Extension)
-- Qwen Code работает через прямой JSON-RPC поверх HTTP
+- Это для клиентов, поддерживающих SSE (Claude Desktop, некоторые VS Code расширения)
+- Для JSON-RPC клиентов используйте `/mcp`
+
+---
+
+## Поддерживаемые клиенты
+
+| Клиент | Рекомендуемый endpoint | Примечание |
+|--------|----------------------|------------|
+| Claude Desktop | `/sse` | Требует SSE для двусторонней связи |
+| VS Code MCP Extension | `/mcp` | Поддерживает JSON-RPC поверх HTTP |
+| Кастомные MCP клиенты | `/mcp` | JSON-RPC поверх HTTP POST |
+| CLI инструменты | `/mcp` | Прямые HTTP запросы |
 
 ---
 
@@ -266,4 +256,4 @@ curl -X POST http://localhost:8002/index/rebuild
 ---
 
 **Дата обновления:** 6 марта 2026 г.
-**Версия документа:** 1.1 (исправлен URL с `/sse` на `/mcp`)
+**Версия документа:** 2.0 (универсальная документация для всех MCP клиентов)
