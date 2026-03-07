@@ -1,7 +1,7 @@
 ﻿"""Р“Р»Р°РІРЅРѕРµ РїСЂРёР»РѕР¶РµРЅРёРµ MCP СЃРµСЂРІРµСЂР° СЃРёРЅС‚Р°РєСЃРёСЃ-РїРѕРјРѕС‰РЅРёРєР° 1РЎ."""
 
 from typing import Optional
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
@@ -12,7 +12,22 @@ from src.core.metrics.collector import get_metrics_collector
 from src.core.lifespan import get_lifespan_manager
 from src.core.exception_handlers import setup_exception_handlers
 
+# Импорт глобальных сервисов для Depends()
+from src.core.elasticsearch import es_client
+from src.search.search_service import search_service
+
+
 logger = get_logger(__name__)
+
+
+def get_es_client():
+    """Фабрика для внедрения ElasticsearchClient через Depends()."""
+    return es_client
+
+
+def get_search_service():
+    """Фабрика для внедрения SearchService через Depends()."""
+    return search_service
 
 # Инициализация LifespanManager
 lifespan_manager = get_lifespan_manager(
