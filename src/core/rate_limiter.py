@@ -222,8 +222,8 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         """Обработка запроса с проверкой rate limit."""
         try:
             self._metrics = get_metrics_collector()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to get metrics: {e}")
 
         client_ip = request.client.host if request.client else "unknown"
 

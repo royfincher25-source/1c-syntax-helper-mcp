@@ -23,7 +23,7 @@ class ElasticsearchConfig(BaseModel):
 class ServerConfig(BaseModel):
     """Конфигурация сервера."""
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 8002
     workers: int = 1
     log_level: str = "INFO"
 
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     
     # Сервер настройки
     server_host: str = "0.0.0.0"
-    server_port: int = 8000
+    server_port: int = 8002
     log_level: str = "INFO"
     
     # Пути к данным

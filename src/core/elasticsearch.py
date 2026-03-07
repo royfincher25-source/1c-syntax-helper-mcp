@@ -147,7 +147,11 @@ class ElasticsearchClient:
         try:
             await self._client.ping()
             return True
-        except Exception:
+        except (ConnectionError, TimeoutError) as e:
+            logger.warning(f"Connection failed: {e}")
+            return False
+        except Exception as e:
+            logger.exception(f"Elasticsearch ping failed: {e}")
             return False
     
     async def index_exists(self) -> bool:

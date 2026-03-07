@@ -85,12 +85,12 @@ class SyntaxInfoService:
     ) -> Dict[str, Any]:
         """Строит Elasticsearch запрос для поиска синтаксиса."""
         if object_name:
-            # Для поиска метода объекта используем гибкий поиск
+            # Для поиска метода объекта используем гибкий поиск с .keyword для точных совпадений
             return {
                 "query": {
                     "bool": {
-                        "must": [
-                            {"term": {"object": object_name}}
+                        "filter": [
+                            {"term": {"object.keyword": object_name}}
                         ],
                         "should": [
                             {"term": {"name.keyword": {"value": element_name, "boost": 5.0}}},

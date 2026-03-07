@@ -38,12 +38,12 @@ echo   LOG_LEVEL=%LOG_LEVEL%
 
 REM Start the server
 REM Запускаем сервер
-echo Starting MCP server on http://localhost:8000
-echo Запускаем MCP сервер на http://localhost:8000
+echo Starting MCP server on http://localhost:8002
+echo Запускаем MCP сервер на http://localhost:8002
 echo Press Ctrl+C to stop the server
 echo Нажмите Ctrl+C для остановки сервера
 
-python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn src.main:app --host 0.0.0.0 --port 8002 --reload
 
 echo Server stopped.
 echo Сервер остановлен.

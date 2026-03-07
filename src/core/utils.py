@@ -135,7 +135,7 @@ def validate_file_path(file_path: Path, allowed_extensions: Optional[List[str]] 
     # Проверка на path traversal
     try:
         file_path.resolve(strict=True)
-    except Exception:
+    except OSError as e:
         raise SafeSubprocessError(f"Невалидный путь: {file_path}")
     
     if allowed_extensions:

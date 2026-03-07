@@ -72,7 +72,7 @@ class SystemMonitor:
                 network = psutil.net_io_counters()
                 await self.metrics.set_gauge('system.network.bytes_sent', network.bytes_sent)
                 await self.metrics.set_gauge('system.network.bytes_recv', network.bytes_recv)
-            except Exception:
+            except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
                 pass
             
         except Exception as e:

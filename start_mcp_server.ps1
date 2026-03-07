@@ -38,12 +38,12 @@ Write-Host "  LOG_LEVEL=$env:LOG_LEVEL" -ForegroundColor Gray
 
 # Start the server
 # Запускаем сервер
-Write-Host "Starting MCP server on http://localhost:8000" -ForegroundColor Green
-Write-Host "Запускаем MCP сервер на http://localhost:8000" -ForegroundColor Green
+Write-Host "Starting MCP server on http://localhost:8002" -ForegroundColor Green
+Write-Host "Запускаем MCP сервер на http://localhost:8002" -ForegroundColor Green
 Write-Host "Press Ctrl+C to stop the server" -ForegroundColor Yellow
 Write-Host "Нажмите Ctrl+C для остановки сервера" -ForegroundColor Yellow
 
-python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn src.main:app --host 0.0.0.0 --port 8002 --reload
 
 Write-Host "Server stopped." -ForegroundColor Red
 Write-Host "Сервер остановлен." -ForegroundColor Red

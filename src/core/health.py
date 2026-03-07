@@ -182,8 +182,10 @@ class HealthChecker:
                 try:
                     health_response = await es_client._client.cluster.health()
                     cluster_health = health_response.get("status", "unknown")
-                except Exception:
-                    pass
+                except (ConnectionError, TimeoutError) as e:
+                    logger.warning(f"Cluster health check failed: {e}")
+                except Exception as e:
+                    logger.exception(f"Unexpected error getting cluster health: {e}")
             
             check = HealthCheck(
                 name="elasticsearch",

@@ -1,6 +1,7 @@
 """Сервис для получения списка элементов объекта 1С."""
 
 from typing import Optional, Dict, Any, List
+import json
 
 from src.core.elasticsearch import es_client
 from src.core.logging import get_logger
@@ -11,7 +12,7 @@ logger = get_logger(__name__)
 class ObjectMembersService:
     """
     Сервис для получения списка элементов объекта 1С.
-    
+
     Отвечает за:
     - Получение списка методов, свойств, событий объекта
     - Группировку по типу элементов
@@ -26,24 +27,26 @@ class ObjectMembersService:
     ) -> Dict[str, Any]:
         """
         Получить список элементов объекта с фильтрацией по типу.
-        
+
         Args:
             object_name: Имя объекта
             member_type: Тип элементов (all, methods, properties, events)
             limit: Максимальное количество результатов
-            
+
         Returns:
             Словарь с методами, свойствами и событиями объекта
         """
         try:
-            # Базовый фильтр по объекту
-            query_filters = [{"term": {"object": object_name}}]
+            logger.info(f"[ObjectMembersService] Запрос элементов для объекта: '{object_name}', тип: '{member_type}'")
             
+            # Базовый фильтр по объекту - используем .keyword для точного совпадения
+            query_filters = [{"term": {"object.keyword": object_name}}]
+
             # Добавляем фильтры по типу элементов
             type_filters = self._build_member_type_filters(member_type)
             if type_filters:
                 query_filters.append({"bool": {"should": type_filters}})
-            
+
             # Строим запрос
             elasticsearch_query = {
                 "query": {
@@ -54,8 +57,18 @@ class ObjectMembersService:
                 "size": limit,
                 "sort": [{"name.keyword": {"order": "asc"}}]
             }
-            
+
+            # Логируем запрос для отладки
+            logger.debug(f"[ObjectMembersService] Elasticsearch запрос: {json.dumps(elasticsearch_query, ensure_ascii=False)}")
+
             response = await es_client.search(elasticsearch_query)
+            
+            # Логируем ответ для отладки
+            if response:
+                total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
+                logger.debug(f"[ObjectMembersService] Получено ответов от ES: {total_hits}")
+            else:
+                logger.warning("[ObjectMembersService] Ответ от ES пустой (None)")
             
             # Группируем результаты
             methods = []
@@ -98,14 +111,14 @@ class ObjectMembersService:
         """Строит фильтры по типу элементов."""
         if member_type == "methods":
             return [
-                {"term": {"type": "object_function"}},
-                {"term": {"type": "object_procedure"}},
-                {"term": {"type": "object_constructor"}}
+                {"term": {"type.keyword": "object_function"}},
+                {"term": {"type.keyword": "object_procedure"}},
+                {"term": {"type.keyword": "object_constructor"}}
             ]
         elif member_type == "properties":
-            return [{"term": {"type": "object_property"}}]
+            return [{"term": {"type.keyword": "object_property"}}]
         elif member_type == "events":
-            return [{"term": {"type": "object_event"}}]
+            return [{"term": {"type.keyword": "object_event"}}]
         return []
 
     async def get_methods(self, object_name: str, limit: int = 50) -> List[Dict[str, Any]]:

@@ -58,8 +58,8 @@ class ExceptionHandler:
             from src.core.metrics.collector import get_metrics_collector
             metrics = get_metrics_collector()
             await metrics.increment(f"errors.{error_type.lower()}")
-        except Exception:
-            pass  # Игнорируем ошибки метрик
+        except Exception as e:
+            logger.exception(f"Failed to record metrics: {e}")
 
         return JSONResponse(
             status_code=status_code,

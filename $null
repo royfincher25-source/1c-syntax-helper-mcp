@@ -1,14 +1,5 @@
-error: unknown switch `e'
-usage: git check-ignore [<options>] <pathname>...
-   or: git check-ignore [<options>] --stdin
+unknown shorthand flag: 'S' in -Seconds
 
-    -q, --[no-]quiet      suppress progress reporting
-    -v, --[no-]verbose    be verbose
+Usage:  docker rm [OPTIONS] CONTAINER [CONTAINER...]
 
-    --[no-]stdin          read file names from stdin
-    -z                    terminate input and output records by a NUL character
-    -n, --[no-]non-matching
-                          show non-matching input paths
-    --no-index            ignore index when checking
-    --index               opposite of --no-index
-
+Run 'docker rm --help' for more information

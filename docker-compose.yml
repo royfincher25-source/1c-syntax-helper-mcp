@@ -36,6 +36,8 @@ services:
       - HBK_FILE_PATH=/app/data/hbk/1c_documentation.hbk
       - ELASTICSEARCH_HOST=elasticsearch
       - ELASTICSEARCH_PORT=9200
+      - SERVER_PORT=8000
+      - SERVER_HOST=0.0.0.0
     restart: unless-stopped
     healthcheck:
       test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]

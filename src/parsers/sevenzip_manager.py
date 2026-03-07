@@ -94,7 +94,7 @@ class SevenZipSessionManager:
             return (proc.returncode == 0 or
                     b'Igor Pavlov' in stdout or
                     b'7-Zip' in stdout)
-        except Exception:
+        except (asyncio.TimeoutError, FileNotFoundError, OSError):
             return False
 
     async def list_archive(self, archive_path: Path) -> List[HBKEntry]:
