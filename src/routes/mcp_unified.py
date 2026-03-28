@@ -29,6 +29,9 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="", tags=["mcp"])
 
+
+
+
 TOOLS_SCHEMA = [
     {
         "name": MCPToolType.FIND_1C_HELP,
@@ -98,8 +101,9 @@ TOOLS_SCHEMA = [
 
 
 @router.get("/mcp")
+@router.get("/sse")
 async def mcp_sse_endpoint(request: Request):
-    """SSE endpoint для MCP протокола."""
+    """SSE endpoint для MCP протокола (/mcp или /sse)."""
     session_id = str(uuid.uuid4())
     message_queue = asyncio.Queue(maxsize=SSE_QUEUE_MAX_SIZE)
 
@@ -149,6 +153,7 @@ async def mcp_sse_endpoint(request: Request):
 
 
 @router.post("/mcp")
+@router.post("/sse")
 async def mcp_jsonrpc_endpoint(request: Request):
     """JSON-RPC endpoint для MCP - поддерживает SSE и HTTP режимы."""
     try:
