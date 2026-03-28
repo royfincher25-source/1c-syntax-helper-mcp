@@ -51,17 +51,18 @@ class QueryBuilder:
         Строит точный запрос по имени функции с использованием filter context.
 
         Оптимизация:
-        - term запросы в filter context для точных совпадений по name
+        - query_string для поиска по части имени (поддерживает кириллицу)
+        - term для точных совпадений по name
         - wildcard для full_path (чтобы находить Объект.Имя, Имя.Метод, и просто Имя)
         - match_phrase только для ранжирования
         """
         return {
             "query": {
                 "bool": {
-                    "filter": [
-                        {"term": {"name.keyword": function_name}}
-                    ],
                     "should": [
+                        {"query_string": {"query": f"*{function_name}*", "fields": ["name", "name.keyword"], "boost": 5.0}},
+                        {"query_string": {"query": f"*{function_name}*", "fields": ["full_path"], "boost": 3.0}},
+                        {"term": {"name.keyword": {"value": function_name, "boost": 5.0}}},
                         {"term": {"full_path": {"value": function_name, "boost": 3.0}}},
                         {"wildcard": {"full_path": {"value": f"*{function_name}*", "boost": 2.0}}},
                         {"match_phrase": {"name": {"query": function_name, "boost": 2.0}}},

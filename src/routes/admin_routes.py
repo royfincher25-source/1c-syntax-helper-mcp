@@ -126,6 +126,10 @@ async def rebuild_index():
         if not success:
             raise RuntimeError("Failed to rebuild index")
 
+        # Очищаем кэш после успешной переиндексации
+        from src.core.cache import cache
+        await cache.clear()
+
         return indexer.metrics.to_dict()
 
     # Создаем фоновую задачу

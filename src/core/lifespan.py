@@ -64,9 +64,14 @@ class LifespanManager:
         # Настройка dependency injection
         setup_dependencies()
 
-        # Запуск мониторинга системы
-        await monitor.start_monitoring(interval=60)
-        logger.info("System monitoring started")
+        # Запуск мониторинга системы (если включено)
+        import os
+        monitor_enabled = os.getenv("SYSTEM_MONITORING", "true").lower() == "true"
+        if monitor_enabled:
+            await monitor.start_monitoring(interval=120)
+            logger.info("System monitoring started (120s interval)")
+        else:
+            logger.info("System monitoring disabled")
 
         # Запуск кэша
         await cache.start()

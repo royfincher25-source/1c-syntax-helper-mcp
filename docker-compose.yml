@@ -7,7 +7,7 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     ports:
@@ -38,6 +38,7 @@ services:
       - ELASTICSEARCH_PORT=9200
       - SERVER_PORT=8000
       - SERVER_HOST=0.0.0.0
+      - SYSTEM_MONITORING=false
     restart: unless-stopped
     healthcheck:
       test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
