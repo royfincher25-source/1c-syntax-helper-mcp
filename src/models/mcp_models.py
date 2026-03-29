@@ -12,6 +12,10 @@ class MCPToolType(str, Enum):
     GET_QUICK_REFERENCE = "get_quick_reference"
     SEARCH_BY_CONTEXT = "search_by_context"
     LIST_OBJECT_MEMBERS = "list_object_members"
+    GET_EXAMPLES = "get_examples"
+    GET_METHODS = "get_methods"
+    GET_PROPERTIES = "get_properties"
+    GET_EVENTS = "get_events"
 
 
 class DocumentationType(str, Enum):
@@ -79,6 +83,31 @@ class ListObjectMembersRequest(BaseModel):
     """Модель запроса списка элементов объекта."""
     object_name: str = Field(..., description="Имя объекта")
     member_type: MemberType = Field(MemberType.ALL, description="Тип элементов")
+    limit: Optional[int] = Field(50, description="Максимальное количество результатов")
+
+
+class GetExamplesRequest(BaseModel):
+    """Модель запроса примеров использования."""
+    element_name: str = Field(..., description="Имя элемента")
+    object_name: Optional[str] = Field(None, description="Имя объекта")
+    limit: Optional[int] = Field(5, description="Максимальное количество примеров")
+
+
+class GetMethodsRequest(BaseModel):
+    """Модель запроса методов объекта."""
+    object_name: str = Field(..., description="Имя объекта")
+    limit: Optional[int] = Field(50, description="Максимальное количество результатов")
+
+
+class GetPropertiesRequest(BaseModel):
+    """Модель запроса свойств объекта."""
+    object_name: str = Field(..., description="Имя объекта")
+    limit: Optional[int] = Field(50, description="Максимальное количество результатов")
+
+
+class GetEventsRequest(BaseModel):
+    """Модель запроса событий объекта."""
+    object_name: str = Field(..., description="Имя объекта")
     limit: Optional[int] = Field(50, description="Максимальное количество результатов")
 
 

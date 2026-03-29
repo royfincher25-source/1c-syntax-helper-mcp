@@ -4,6 +4,7 @@ import logging
 import json
 import sys
 import uuid
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -11,49 +12,50 @@ from typing import Dict, Any, Optional
 from src.core.config import settings
 
 
-# Контекстная переменная для request_id
+_request_id_var: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
+_client_ip_var: ContextVar[Optional[str]] = ContextVar("client_ip", default=None)
+_start_time_var: ContextVar[Optional[float]] = ContextVar("start_time", default=None)
+
+
 class LogContext:
-    """Контекст для хранения request_id."""
-    _request_id: Optional[str] = None
-    _client_ip: Optional[str] = None
-    _start_time: Optional[float] = None
+    """Контекст для хранения request_id (thread-safe для async)."""
 
     @classmethod
     def set_request_id(cls, request_id: str) -> None:
         """Устанавливает request_id для текущего запроса."""
-        cls._request_id = request_id
+        _request_id_var.set(request_id)
 
     @classmethod
     def get_request_id(cls) -> Optional[str]:
         """Получает текущий request_id."""
-        return cls._request_id
+        return _request_id_var.get()
 
     @classmethod
     def set_client_ip(cls, client_ip: str) -> None:
         """Устанавливает client_ip для текущего запроса."""
-        cls._client_ip = client_ip
+        _client_ip_var.set(client_ip)
 
     @classmethod
     def get_client_ip(cls) -> Optional[str]:
         """Получает текущий client_ip."""
-        return cls._client_ip
+        return _client_ip_var.get()
 
     @classmethod
     def set_start_time(cls, start_time: float) -> None:
         """Устанавливает время начала запроса."""
-        cls._start_time = start_time
+        _start_time_var.set(start_time)
 
     @classmethod
     def get_start_time(cls) -> Optional[float]:
         """Получает время начала запроса."""
-        return cls._start_time
+        return _start_time_var.get()
 
     @classmethod
     def clear(cls) -> None:
         """Очищает контекст."""
-        cls._request_id = None
-        cls._client_ip = None
-        cls._start_time = None
+        _request_id_var.set(None)
+        _client_ip_var.set(None)
+        _start_time_var.set(None)
 
 
 class JSONFormatter(logging.Formatter):

@@ -138,9 +138,18 @@ class HBKParser:
         """Очищает ресурсы."""
         if hasattr(self, '_zip_manager') and self._zip_manager:
             try:
-                asyncio.run(self._zip_manager.close())
-            except Exception as e:
-                logger.warning(f"Ошибка закрытия 7zip сессии: {e}")
+                loop = None
+                try:
+                    loop = asyncio.get_running_loop()
+                    future = asyncio.run_coroutine_threadsafe(
+                        self._zip_manager.close(),
+                        loop
+                    )
+                    future.result(timeout=30)
+                except RuntimeError:
+                    asyncio.run(self._zip_manager.close())
+                except Exception as e:
+                    logger.warning(f"Ошибка закрытия 7zip сессии: {e}")
             finally:
                 self._zip_manager = None
     

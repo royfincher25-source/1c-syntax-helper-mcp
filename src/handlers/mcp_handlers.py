@@ -2,7 +2,8 @@
 
 from src.models.mcp_models import (
     MCPResponse, Find1CHelpRequest, GetSyntaxInfoRequest, GetQuickReferenceRequest,
-    SearchByContextRequest, ListObjectMembersRequest
+    SearchByContextRequest, ListObjectMembersRequest,
+    GetExamplesRequest, GetMethodsRequest, GetPropertiesRequest, GetEventsRequest
 )
 from src.search.search_service import search_service
 from src.handlers.mcp_formatter import mcp_formatter
@@ -30,6 +31,22 @@ def _log_mcp_error(tool_name: str, error: str, **context):
                 extra={"extra_data": {"tool": tool_name, "status": "error", "error": error, **context}})
 
 
+def _clean_string(value):
+    """Clean any value to ensure valid UTF-8 encoding."""
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode('utf-8', errors='replace')
+    if isinstance(value, str):
+        try:
+            return value.encode('utf-8', errors='replace').decode('utf-8')
+        except Exception:
+            return str(value)
+    if isinstance(value, (int, float, bool)):
+        return value
+    return str(value)
+
+
 async def handle_find_1c_help(request: Find1CHelpRequest) -> dict:
     """Универсальный поиск справки по любому элементу 1С."""
     _log_mcp_request("find_1c_help", query=request.query, limit=request.limit)
@@ -51,7 +68,11 @@ async def handle_find_1c_help(request: Find1CHelpRequest) -> dict:
 
         # Результаты
         for i, result in enumerate(search_results, 1):
-            content.append(mcp_formatter.format_search_result(result, i))
+            formatted = mcp_formatter.format_search_result(result, i)
+            # Clean all string values
+            if "text" in formatted:
+                formatted["text"] = _clean_string(formatted["text"])
+            content.append(formatted)
 
         _log_mcp_success("find_1c_help", count=len(search_results))
         return {"content": content, "error": None}
@@ -194,4 +215,130 @@ async def handle_list_object_members(request: ListObjectMembersRequest) -> dict:
 
     except Exception as e:
         _log_mcp_error("list_object_members", str(e))
+        return {"content": [], "error": str(e)}
+
+
+async def handle_get_examples(request: GetExamplesRequest) -> dict:
+    """Получить примеры использования кода для элемента."""
+    _log_mcp_request("get_examples", element_name=request.element_name, 
+                    object_name=request.object_name, limit=request.limit)
+
+    try:
+        result = await search_service.get_examples_for_element(
+            request.element_name,
+            request.object_name,
+            request.limit
+        )
+
+        if result.get("error"):
+            _log_mcp_error("get_examples", result["error"])
+            return {"content": [], "error": result["error"]}
+
+        examples = result.get("examples", [])
+
+        if not examples:
+            _log_mcp_success("get_examples", count=0)
+            return {"content": [{"type": "text", "text": f"Примеры для '{request.element_name}' не найдены"}]}
+
+        text = f"📋 **Примеры для '{request.element_name}':**\n\n"
+        for i, example in enumerate(examples, 1):
+            text += f"**Пример {i}:**\n"
+            text += f"```\n{example}\n```\n\n"
+
+        _log_mcp_success("get_examples", count=len(examples))
+        return {"content": [{"type": "text", "text": text}]}
+
+    except Exception as e:
+        _log_mcp_error("get_examples", str(e))
+        return {"content": [], "error": str(e)}
+
+
+async def handle_get_methods(request: GetMethodsRequest) -> dict:
+    """Получить список методов объекта."""
+    _log_mcp_request("get_methods", object_name=request.object_name, limit=request.limit)
+
+    try:
+        methods = await search_service.get_methods(request.object_name, request.limit)
+
+        if not methods:
+            _log_mcp_success("get_methods", count=0)
+            return {"content": [{"type": "text", "text": f"Методы для '{request.object_name}' не найдены"}]}
+
+        text = f"🔧 **Методы объекта '{request.object_name}':**\n\n"
+        for i, method in enumerate(methods, 1):
+            name = method.get("name", "Unknown")
+            syntax = method.get("syntax_ru", "")
+            desc = method.get("description", "")[:100]
+            text += f"**{i}. {name}**\n"
+            if syntax:
+                text += f"   {syntax}\n"
+            if desc:
+                text += f"   {desc}...\n"
+            text += "\n"
+
+        _log_mcp_success("get_methods", count=len(methods))
+        return {"content": [{"type": "text", "text": text}]}
+
+    except Exception as e:
+        _log_mcp_error("get_methods", str(e))
+        return {"content": [], "error": str(e)}
+
+
+async def handle_get_properties(request: GetPropertiesRequest) -> dict:
+    """Получить список свойств объекта."""
+    _log_mcp_request("get_properties", object_name=request.object_name, limit=request.limit)
+
+    try:
+        properties = await search_service.get_properties(request.object_name, request.limit)
+
+        if not properties:
+            _log_mcp_success("get_properties", count=0)
+            return {"content": [{"type": "text", "text": f"Свойства для '{request.object_name}' не найдены"}]}
+
+        text = f"📦 **Свойства объекта '{request.object_name}':**\n\n"
+        for i, prop in enumerate(properties, 1):
+            name = prop.get("name", "Unknown")
+            prop_type = prop.get("type", "")
+            desc = prop.get("description", "")[:100]
+            text += f"**{i}. {name}**"
+            if prop_type:
+                text += f" ({prop_type})"
+            text += "\n"
+            if desc:
+                text += f"   {desc}...\n"
+            text += "\n"
+
+        _log_mcp_success("get_properties", count=len(properties))
+        return {"content": [{"type": "text", "text": text}]}
+
+    except Exception as e:
+        _log_mcp_error("get_properties", str(e))
+        return {"content": [], "error": str(e)}
+
+
+async def handle_get_events(request: GetEventsRequest) -> dict:
+    """Получить список событий объекта."""
+    _log_mcp_request("get_events", object_name=request.object_name, limit=request.limit)
+
+    try:
+        events = await search_service.get_events(request.object_name, request.limit)
+
+        if not events:
+            _log_mcp_success("get_events", count=0)
+            return {"content": [{"type": "text", "text": f"События для '{request.object_name}' не найдены"}]}
+
+        text = f"⚡ **События объекта '{request.object_name}':**\n\n"
+        for i, event in enumerate(events, 1):
+            name = event.get("name", "Unknown")
+            desc = event.get("description", "")[:100]
+            text += f"**{i}. {name}**\n"
+            if desc:
+                text += f"   {desc}...\n"
+            text += "\n"
+
+        _log_mcp_success("get_events", count=len(events))
+        return {"content": [{"type": "text", "text": text}]}
+
+    except Exception as e:
+        _log_mcp_error("get_events", str(e))
         return {"content": [], "error": str(e)}

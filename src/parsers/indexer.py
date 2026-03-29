@@ -266,7 +266,7 @@ class ElasticsearchIndexer:
                 # Добавляем действие индексации
                 bulk_body.append({
                     "index": {
-                        "_index": es_client._config.index_name,
+                        "_index": es_client.config.index_name,
                         "_id": doc.id
                     }
                 })
@@ -275,8 +275,9 @@ class ElasticsearchIndexer:
                 bulk_body.append(self._prepare_document(doc))
             
             # Выполняем bulk запрос
-            if es_client._client:
-                response = await es_client._client.bulk(body=bulk_body)
+            client = es_client.client
+            if client:
+                response = await client.bulk(body=bulk_body)
                 
                 # Проверяем ошибки
                 if response.get("errors"):
@@ -344,8 +345,9 @@ class ElasticsearchIndexer:
         try:
             # Удаляем старый индекс если существует
             if await es_client.index_exists():
-                if es_client._client:
-                    await es_client._client.indices.delete(index=es_client._config.index_name)
+                client = es_client.client
+                if client:
+                    await client.indices.delete(index=es_client.config.index_name)
 
             # Создаем новый индекс
             await es_client.create_index()
@@ -370,21 +372,23 @@ class ElasticsearchIndexer:
             if not await es_client.index_exists():
                 return {"exists": False, "documents_count": 0}
             
+            client = es_client.client
+            index_name = es_client.config.index_name
             # Получаем статистику
-            if es_client._client:
-                stats_response = await es_client._client.indices.stats(
-                    index=es_client._config.index_name
+            if client:
+                stats_response = await client.indices.stats(
+                    index=index_name
                 )
                 
-                count_response = await es_client._client.count(
-                    index=es_client._config.index_name
+                count_response = await client.count(
+                    index=index_name
                 )
                 
                 return {
                     "exists": True,
                     "documents_count": count_response.get("count", 0),
-                    "size_in_bytes": stats_response["indices"][es_client._config.index_name]["total"]["store"]["size_in_bytes"],
-                    "index_name": es_client._config.index_name
+                    "size_in_bytes": stats_response["indices"][index_name]["total"]["store"]["size_in_bytes"],
+                    "index_name": index_name
                 }
             
             return None

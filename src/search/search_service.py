@@ -101,5 +101,29 @@ class SearchService:
             limit=limit
         )
 
+    async def get_methods(
+        self,
+        object_name: str,
+        limit: int = 50
+    ) -> Dict[str, Any]:
+        """Получить методы объекта."""
+        return await self.members.get_methods(object_name, limit)
+
+    async def get_properties(
+        self,
+        object_name: str,
+        limit: int = 50
+    ) -> Dict[str, Any]:
+        """Получить свойства объекта."""
+        return await self.members.get_properties(object_name, limit)
+
+    async def get_events(
+        self,
+        object_name: str,
+        limit: int = 50
+    ) -> Dict[str, Any]:
+        """Получить события объекта."""
+        return await self.members.get_events(object_name, limit)
+
 
 search_service = SearchService()

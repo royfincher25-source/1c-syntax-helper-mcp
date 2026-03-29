@@ -13,19 +13,19 @@ from src.core.lifespan import get_lifespan_manager
 from src.core.exception_handlers import setup_exception_handlers
 
 # Импорт глобальных сервисов для Depends()
-from src.core.elasticsearch import es_client
-from src.search.search_service import search_service
+from src.core.elasticsearch import es_client, ElasticsearchClient
+from src.search.search_service import search_service, SearchService
 
 
 logger = get_logger(__name__)
 
 
-def get_es_client():
+def get_es_client() -> ElasticsearchClient:
     """Фабрика для внедрения ElasticsearchClient через Depends()."""
     return es_client
 
 
-def get_search_service():
+def get_search_service() -> SearchService:
     """Фабрика для внедрения SearchService через Depends()."""
     return search_service
 
@@ -44,20 +44,14 @@ app = FastAPI(
     lifespan=lifespan_manager.lifespan
 )
 
-# Р”РѕР±Р°РІР»СЏРµРј CORS middleware
+# Р”РѕР±Р°РІР»СЏРµРј CORS middleware (настраивается через settings.cors)
+cors_config = settings.cors
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5173", 
-        "http://localhost:8002",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:8002",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=cors_config.allow_origins,
+    allow_credentials=cors_config.allow_credentials,
+    allow_methods=cors_config.allow_methods,
+    allow_headers=cors_config.allow_headers,
 )
 
 # Р”РѕР±Р°РІР»СЏРµРј middleware РґР»СЏ Р»РѕРіРёСЂРѕРІР°РЅРёСЏ СЃ request_id

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -24,11 +25,15 @@ class LRUStrategy(EvictionStrategy):
     
     def select_eviction_key(self, cache: dict) -> str:
         """Выбирает наименее используемый ключ."""
+        if not cache:
+            raise ValueError("Cache is empty")
         return next(iter(cache))
     
     def on_access(self, cache: dict, key: str) -> None:
         """Перемещает accessed ключ в конец (для OrderedDict)."""
-        pass
+        if key in cache:
+            entry = cache[key]
+            entry.last_accessed = datetime.now().timestamp()
 
 
 class LFUStrategy(EvictionStrategy):
@@ -36,6 +41,8 @@ class LFUStrategy(EvictionStrategy):
     
     def select_eviction_key(self, cache: dict) -> str:
         """Выбирает ключ с наименьшим количеством обращений."""
+        if not cache:
+            raise ValueError("Cache is empty")
         min_access_count = float('inf')
         min_key = None
         
@@ -48,4 +55,5 @@ class LFUStrategy(EvictionStrategy):
     
     def on_access(self, cache: dict, key: str) -> None:
         """Увеличивает счётчик обращений."""
-        pass
+        if key in cache:
+            cache[key].access_count += 1

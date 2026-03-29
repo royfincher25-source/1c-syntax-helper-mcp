@@ -178,9 +178,10 @@ class HealthChecker:
             
             # Получаем cluster health (если доступно)
             cluster_health = "unknown"
-            if es_client._client:
+            client = es_client.client
+            if client:
                 try:
-                    health_response = await es_client._client.cluster.health()
+                    health_response = await client.cluster.health()
                     cluster_health = health_response.get("status", "unknown")
                 except (ConnectionError, TimeoutError) as e:
                     logger.warning(f"Cluster health check failed: {e}")

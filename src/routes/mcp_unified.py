@@ -4,6 +4,7 @@ import asyncio
 import json
 import time
 import uuid
+import traceback
 from typing import Optional
 
 from fastapi import APIRouter, Request
@@ -18,11 +19,13 @@ from src.core.constants import (
 from src.models.mcp_models import (
     Find1CHelpRequest, GetSyntaxInfoRequest,
     GetQuickReferenceRequest, SearchByContextRequest,
-    ListObjectMembersRequest, MCPToolType
+    ListObjectMembersRequest, MCPToolType,
+    GetExamplesRequest, GetMethodsRequest, GetPropertiesRequest, GetEventsRequest
 )
 from src.handlers.mcp_handlers import (
     handle_find_1c_help, handle_get_syntax_info, handle_get_quick_reference,
-    handle_search_by_context, handle_list_object_members
+    handle_search_by_context, handle_list_object_members,
+    handle_get_examples, handle_get_methods, handle_get_properties, handle_get_events
 )
 
 logger = get_logger(__name__)
@@ -96,6 +99,55 @@ TOOLS_SCHEMA = [
             },
             "required": ["object_name"]
         }
+    },
+    {
+        "name": MCPToolType.GET_EXAMPLES,
+        "description": "Получить примеры использования кода для элемента",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "element_name": {"type": "string", "description": "Имя элемента"},
+                "object_name": {"type": "string", "description": "Имя объекта"},
+                "limit": {"type": "number", "description": "Максимум результатов"}
+            },
+            "required": ["element_name"]
+        }
+    },
+    {
+        "name": MCPToolType.GET_METHODS,
+        "description": "Получить список методов объекта",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Имя объекта 1С"},
+                "limit": {"type": "number", "description": "Максимум результатов"}
+            },
+            "required": ["object_name"]
+        }
+    },
+    {
+        "name": MCPToolType.GET_PROPERTIES,
+        "description": "Получить список свойств объекта",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Имя объекта 1С"},
+                "limit": {"type": "number", "description": "Максимум результатов"}
+            },
+            "required": ["object_name"]
+        }
+    },
+    {
+        "name": MCPToolType.GET_EVENTS,
+        "description": "Получить список событий объекта",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Имя объекта 1С"},
+                "limit": {"type": "number", "description": "Максимум результатов"}
+            },
+            "required": ["object_name"]
+        }
     }
 ]
 
@@ -156,9 +208,18 @@ async def mcp_sse_endpoint(request: Request):
 @router.post("/sse")
 async def mcp_jsonrpc_endpoint(request: Request):
     """JSON-RPC endpoint для MCP - поддерживает SSE и HTTP режимы."""
+    session_id = None
     try:
         session_id = request.query_params.get("session_id")
-        data = await request.json()
+        
+        body = await request.body()
+        
+        try:
+            data = json.loads(body)
+            logger.debug(f"MCP parsed JSON: {data}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as je:
+            logger.error(f"JSON/Unicode decode failed: {je}, body bytes: {body[:200] if body else b''}")
+            raise
 
         if not isinstance(data, dict) or data.get("jsonrpc") != "2.0":
             return _make_error(-32600, "Invalid Request", session_id, request)
@@ -166,11 +227,15 @@ async def mcp_jsonrpc_endpoint(request: Request):
         response_data = await _process_jsonrpc(data)
         return _send_response(request, session_id, response_data)
 
-    except json.JSONDecodeError:
-        return _make_error(-32700, "Parse error", session_id if 'session_id' in locals() else None, request)
+    except json.JSONDecodeError as e:
+        logger.error(f"MCP JSON decode error: {e}")
+        return _make_error(-32700, f"Parse error: {e}", session_id, request)
+    except UnicodeDecodeError as e:
+        logger.error(f"MCP Unicode decode error: {e}\n{traceback.format_exc()}")
+        return _make_error(-32700, f"Unicode decode error: {e}", session_id, request)
     except Exception as e:
-        logger.error(f"MCP error: {e}")
-        return _make_error(-32603, str(e), session_id if 'session_id' in locals() else None, request)
+        logger.error(f"MCP error: {e}\n{traceback.format_exc()}")
+        return _make_error(-32603, str(e), session_id, request)
 
 
 @router.get("/mcp/tools")
@@ -251,11 +316,28 @@ async def _process_jsonrpc(data: dict) -> dict:
         tool_name = params.get("name")
         tool_args = params.get("arguments", {})
 
-        result = await _call_tool(tool_name, tool_args)
+        try:
+            result = await _call_tool(tool_name, tool_args)
+            result = _clean_response_data(result)
+        except UnicodeDecodeError as e:
+            logger.error(f"Unicode decode error in tool call: {e}")
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": -32603, "message": "Data encoding error"}
+            }
+        except Exception as e:
+            logger.error(f"Error calling tool {tool_name}: {e}")
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": -32603, "message": str(e)}
+            }
+        
         return {
             "jsonrpc": "2.0",
             "id": request_id,
-            "result": {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}]}
+            "result": result
         }
 
     elif method == "ping":
@@ -275,6 +357,33 @@ async def _process_jsonrpc(data: dict) -> dict:
         }
 
 
+def _clean_response_data(data):
+    """Recursively clean all values in response data to ensure valid UTF-8."""
+    if data is None:
+        return None
+    elif isinstance(data, dict):
+        return {str(k): _clean_response_data(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [_clean_response_data(item) for item in data]
+    elif isinstance(data, bytes):
+        try:
+            return data.decode('utf-8', errors='replace')
+        except Exception:
+            return str(data)
+    elif isinstance(data, str):
+        try:
+            return data.encode('utf-8', errors='replace').decode('utf-8')
+        except Exception:
+            return str(data)
+    elif isinstance(data, (int, float, bool)):
+        return data
+    else:
+        try:
+            return str(data)
+        except Exception:
+            return None
+
+
 async def _call_tool(tool_name: str, args: dict) -> dict:
     if tool_name == MCPToolType.FIND_1C_HELP:
         return await handle_find_1c_help(Find1CHelpRequest(**args))
@@ -286,5 +395,13 @@ async def _call_tool(tool_name: str, args: dict) -> dict:
         return await handle_search_by_context(SearchByContextRequest(**args))
     elif tool_name == MCPToolType.LIST_OBJECT_MEMBERS:
         return await handle_list_object_members(ListObjectMembersRequest(**args))
+    elif tool_name == MCPToolType.GET_EXAMPLES:
+        return await handle_get_examples(GetExamplesRequest(**args))
+    elif tool_name == MCPToolType.GET_METHODS:
+        return await handle_get_methods(GetMethodsRequest(**args))
+    elif tool_name == MCPToolType.GET_PROPERTIES:
+        return await handle_get_properties(GetPropertiesRequest(**args))
+    elif tool_name == MCPToolType.GET_EVENTS:
+        return await handle_get_events(GetEventsRequest(**args))
     else:
         raise ValueError(f"Unknown tool: {tool_name}")

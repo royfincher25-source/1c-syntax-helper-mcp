@@ -7,7 +7,7 @@ from functools import wraps
 from elasticsearch import AsyncElasticsearch
 from elasticsearch.exceptions import ConnectionError, NotFoundError, RequestError
 
-from src.core.config import settings
+from src.core.config import settings, ElasticsearchConfig
 from src.core.logging import get_logger
 from src.core.constants import (
     ELASTICSEARCH_CONNECTION_TIMEOUT,
@@ -138,6 +138,16 @@ class ElasticsearchClient:
                 logger.warning(f"Ошибка при отключении от Elasticsearch: {e}")
             finally:
                 self._client = None
+    
+    @property
+    def client(self) -> Optional[AsyncElasticsearch]:
+        """Возвращает клиент Elasticsearch."""
+        return self._client
+    
+    @property
+    def config(self) -> ElasticsearchConfig:
+        """Возвращает конфигурацию Elasticsearch."""
+        return self._config
     
     async def is_connected(self) -> bool:
         """Проверяет подключение к Elasticsearch."""
