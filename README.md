@@ -179,31 +179,59 @@ curl -X POST http://localhost:8002/index/rebuild
 | `get_quick_reference` | Краткая справка по элементу |
 | `search_by_context` | Поиск с фильтром по контексту (глобальный/объектный) |
 | `list_object_members` | Список методов и свойств объекта |
+| `get_examples` | Примеры использования кода |
+| `get_methods` | Список методов объекта |
+| `get_properties` | Список свойств объекта |
+| `get_events` | Список событий объекта |
 
 ### Примеры использования
 
 **find_1c_help** - поиск по запросу:
 ```json
 {
-  "name": "find_1c_help",
-  "arguments": {"query": "Массив", "limit": 5}
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "find_1c_help",
+    "arguments": {"query": "Массив", "limit": 5}
+  }
 }
 ```
 
 **get_syntax_info** - детальная информация:
 ```json
 {
-  "name": "get_syntax_info",
-  "arguments": {"element_name": "Массив"}
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "get_syntax_info",
+    "arguments": {"element_name": "Массив"}
+  }
 }
 ```
 
-**list_object_members** - методы объекта:
+**get_methods** - методы объекта:
 ```json
 {
-  "name": "list_object_members",
-  "arguments": {"object_name": "Массив", "member_type": "all"}
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "get_methods",
+    "arguments": {"object_name": "Массив"}
+  }
 }
+```
+
+### Примечание по кодировке
+
+При отправке запросов с кириллицей используйте файл для передачи данных:
+
+```bash
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"find_1c_help","arguments":{"query":"Сообщить","limit":3}}}' > /tmp/request.json
+curl -s --compressed -X POST "http://localhost:8002/mcp" -H "Content-Type: application/json; charset=utf-8" -d @/tmp/request.json
 ```
 
 ## ⚡ Performance
